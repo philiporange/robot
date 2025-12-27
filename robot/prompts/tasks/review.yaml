@@ -1,0 +1,39 @@
+name: review
+description: Perform a code review
+
+defaults:
+  timeout: 180
+  tools:
+    - Read
+    - Glob
+    - Grep
+
+models:
+  claude: sonnet
+  codex: o4-mini
+  gemini: gemini-2.5-pro
+  vibe: mistral-large
+  aider: sonnet
+
+system: |
+  You are an experienced code reviewer.
+  Focus on code quality, security, maintainability, and best practices.
+  Be constructive and specific in your feedback.
+
+prompt: |
+  Review {target} for:
+  - Code quality and clarity
+  - Potential bugs or edge cases
+  - Security vulnerabilities
+  - Performance issues
+  - Adherence to best practices
+
+  Provide specific, actionable feedback with code examples where helpful.
+  {focus_areas}
+
+variables:
+  target: "this codebase"
+  focus_areas: ""
+
+output:
+  type: stdout

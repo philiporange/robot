@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+<body>
+    <!-- Auth Modal -->
+    <div id="authModal" class="modal-overlay">
+        <div class="auth-container">
+            <h1 class="auth-title">Robot</h1>
+            <form id="authForm" class="auth-form">
+                <input type="text" id="authUsername" required placeholder="Username" class="auth-input">
+                <input type="password" id="authPassword" required placeholder="Password" class="auth-input">
+                <div id="authError" class="auth-error hidden"></div>
+                <div class="auth-actions">
+                    <button type="submit" class="auth-submit">
+                        <span id="authSubmitText">Sign In</span>
+                    </button>
+                    <button type="button" id="toggleAuth" class="auth-toggle">Create account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- New Conversation Modal -->
+    <div id="newConvModal" class="modal-overlay hidden">
+        <div class="new-conv-container">
+            <div class="modal-header">
+                <h2 class="modal-title">New Conversation</h2>
+                <button id="closeNewConvBtn" class="close-btn">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="modal-content">
+                <div class="folder-section">
+                    <div class="folder-nav">
+                        <button id="folderUp" class="folder-up-btn">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/>
+                            </svg>
+                        </button>
+                        <span id="currentPath" class="current-path">~/Code</span>
+                    </div>
+                    <div id="folderList" class="folder-list"></div>
+                    <div class="new-folder-row">
+                        <input type="text" id="newFolderName" placeholder="New folder..." class="new-folder-input">
+                        <button id="createFolderBtn" class="create-folder-btn">Create</button>
+                    </div>
+                </div>
+
+                <div class="model-section">
+                    <label class="field-label">Model</label>
+                    <select id="modelSelect" class="model-select">
+                        <option value="opus" selected>Opus</option>
+                        <option value="sonnet">Sonnet</option>
+                        <option value="haiku">Haiku</option>
+                    </select>
+                </div>
+
+                <input type="text" id="convTitle" placeholder="Title (optional)" class="title-input">
+            </div>
+
+            <button id="createConvBtn" class="create-conv-btn">Start</button>
+        </div>
+    </div>
+
+    <!-- Diff Modal -->
+    <div id="diffModal" class="modal-overlay hidden">
+        <div class="diff-container">
+            <div class="modal-header">
+                <h2 id="diffTitle" class="diff-title"></h2>
+                <button id="closeDiffBtn" class="close-btn">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <pre id="diffContent" class="diff-content"></pre>
+        </div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <span class="logo">Robot</span>
+                <button id="logoutBtn" class="logout-btn">Logout</button>
+            </div>
+            <button id="newConvBtn" class="new-conv-btn">New</button>
+            <nav id="convList" class="conv-list"></nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Chat Header -->
+            <header id="chatHeader" class="chat-header hidden">
+                <div class="header-info">
+                    <h2 id="convTitleDisplay" class="conv-title"></h2>
+                    <p id="convPath" class="conv-path"></p>
+                </div>
+                <div class="header-actions">
+                    <span id="convModel" class="conv-model"></span>
+                    <button id="showFilesBtn" class="files-btn hidden">Files</button>
+                </div>
+            </header>
+
+            <!-- Modified Files Panel -->
+            <div id="filesPanel" class="files-panel hidden">
+                <div class="files-header">
+                    <span class="files-label">Modified</span>
+                    <button id="closeFilesBtn" class="close-btn small">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="filesList" class="files-list"></div>
+            </div>
+
+            <!-- Messages -->
+            <div id="messages" class="messages">
+                <div class="messages-inner">
+                    <p class="empty-state">Select or create a conversation</p>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div id="inputArea" class="input-area hidden">
+                <div class="input-container">
+                    <textarea id="messageInput" rows="1" placeholder="Message..." class="message-input"></textarea>
+                    <button id="sendBtn" class="send-btn">
+                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 5l7 7-7 7M5 12h15"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="statusBar" class="status-bar hidden">
+                    <span class="thinking-text">Thinking</span>
+                    <span id="thinkingTimer" class="thinking-timer">0.0s</span>
+                    <button id="cancelBtn" class="cancel-btn">Cancel</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

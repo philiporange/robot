@@ -1,0 +1,48 @@
+name: readme
+description: Generate a README.md file for a project
+
+defaults:
+  timeout: 300
+  tools:
+    - Read
+    - Glob
+    - Grep
+    - Write
+
+models:
+  claude: sonnet
+  codex: o4-mini
+  gemini: gemini-2.5-pro
+  vibe: mistral-large
+  aider: sonnet
+
+system: |
+  You are a technical documentation expert.
+  Generate clear, accurate README files based on actual project content.
+  Focus on practical usage examples and clear explanations.
+
+prompt: |
+  Analyze this project and generate a comprehensive README.md file.
+
+  Include:
+  - Project title and description
+  - Installation instructions
+  - Usage examples with code
+  - API documentation (if applicable)
+  - Configuration options
+  - License information
+
+  Write the README.md file to the project root.
+  {additional_instructions}
+
+variables:
+  additional_instructions: ""
+
+output:
+  type: file
+  path: README.md
+
+validate:
+  min_length: 200
+  contains:
+    - "# "

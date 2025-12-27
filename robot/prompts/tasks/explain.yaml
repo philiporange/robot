@@ -1,0 +1,38 @@
+name: explain
+description: Explain code or functionality in a project
+
+defaults:
+  timeout: 120
+  tools:
+    - Read
+    - Glob
+    - Grep
+
+models:
+  claude: sonnet
+  codex: o4-mini
+  gemini: gemini-2.5-pro
+  vibe: mistral-large
+  aider: sonnet
+
+system: |
+  You are a code explanation expert.
+  Provide clear, accurate explanations of code functionality.
+  Use examples to illustrate complex concepts.
+
+prompt: |
+  {target}
+
+  Explain:
+  - What this code does
+  - How it works
+  - Key design decisions
+  - Any notable patterns or techniques used
+  {additional_context}
+
+variables:
+  target: "Analyze this codebase and explain its main functionality."
+  additional_context: ""
+
+output:
+  type: stdout

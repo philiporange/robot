@@ -1,0 +1,37 @@
+# Global defaults for Robot
+# These settings are inherited by all prompts unless overridden
+
+defaults:
+  timeout: 180
+  max_retries: 3
+  rate_limit: 10
+
+# Default agent preference order (first available is used)
+agent_priority:
+  - claude
+  - gemini
+  - codex
+  - aider
+  - vibe
+
+# Model tier mappings
+# Use these to select models by capability rather than name
+model_tiers:
+  fast:
+    claude: haiku
+    codex: o4-mini
+    gemini: gemini-2.0-flash
+    vibe: mistral-small
+    aider: haiku
+  balanced:
+    claude: sonnet
+    codex: o4-mini
+    gemini: gemini-2.5-pro
+    vibe: mistral-large
+    aider: sonnet
+  powerful:
+    claude: opus
+    codex: o3
+    gemini: gemini-2.5-pro
+    vibe: mistral-large
+    aider: opus
