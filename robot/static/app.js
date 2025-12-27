@@ -183,12 +183,46 @@ async function loadConversations() {
 
 function renderConversations() {
     elements.convList.innerHTML = conversations.map(c => `
-        <button onclick="selectConversation('${c.id}')"
-            class="conv-item ${currentConversation?.id === c.id ? 'active' : ''}">
-            ${escapeHtml(c.title)}
-        </button>
+        <div class="conv-item-wrapper ${currentConversation?.id === c.id ? 'active' : ''}">
+            <button onclick="selectConversation('${c.id}')" class="conv-item-btn">
+                ${escapeHtml(c.title)}
+            </button>
+            <button onclick="deleteConversation('${c.id}', event)" class="conv-delete-btn" title="Delete">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
     `).join('');
 }
+
+async function deleteConversation(id, event) {
+    event.stopPropagation();
+    if (!confirm('Delete this conversation?')) return;
+
+    try {
+        await api(`/conversations/${id}`, { method: 'DELETE' });
+
+        // If we deleted the current conversation, clear it
+        if (currentConversation?.id === id) {
+            currentConversation = null;
+            elements.chatHeader.classList.add('hidden');
+            elements.inputArea.classList.add('hidden');
+            elements.messages.innerHTML = `
+                <div class="messages-inner">
+                    <p class="empty-state">Select or create a conversation</p>
+                </div>
+            `;
+        }
+
+        await loadConversations();
+    } catch (err) {
+        console.error('Failed to delete conversation:', err);
+    }
+}
+
+// Make deleteConversation available globally
+window.deleteConversation = deleteConversation;
 
 async function selectConversation(id) {
     currentConversation = conversations.find(c => c.id === id);

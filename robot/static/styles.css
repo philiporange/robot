@@ -265,32 +265,63 @@ a {
   border-radius: var(--radius-full);
 }
 
-.conv-item {
+.conv-item-wrapper {
   display: flex;
   align-items: center;
-  padding: var(--space-md) var(--space-lg);
   margin-bottom: 2px;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.conv-item-wrapper:hover {
+  background: var(--bg-hover);
+}
+
+.conv-item-wrapper.active {
+  background: var(--bg-active);
+}
+
+.conv-item-btn {
+  flex: 1;
+  padding: var(--space-md) var(--space-lg);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   background: transparent;
   border-radius: var(--radius-md);
-  transition: all var(--transition-fast);
+  transition: color var(--transition-fast);
   cursor: pointer;
-  width: 100%;
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.conv-item:hover {
+.conv-item-wrapper:hover .conv-item-btn,
+.conv-item-wrapper.active .conv-item-btn {
   color: var(--text-primary);
-  background: var(--bg-hover);
 }
 
-.conv-item.active {
-  color: var(--text-primary);
-  background: var(--bg-active);
+.conv-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: var(--space-sm);
+  color: var(--text-muted);
+  background: transparent;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: all var(--transition-fast);
+}
+
+.conv-item-wrapper:hover .conv-delete-btn {
+  opacity: 1;
+}
+
+.conv-delete-btn:hover {
+  color: var(--error);
+  background: var(--error-subtle);
 }
 
 
@@ -605,9 +636,9 @@ a {
 
 .message-input {
   flex: 1;
-  min-height: 24px;
+  min-height: 44px;
   max-height: 200px;
-  padding: var(--space-sm) var(--space-md);
+  padding: 10px var(--space-md);
   font-size: var(--text-base);
   line-height: var(--leading-normal);
   color: var(--text-primary);
@@ -1188,15 +1219,20 @@ textarea:focus-visible {
   }
 
   .chat-header {
-    padding: var(--space-md) var(--space-lg);
+    padding: var(--space-sm) var(--space-md);
   }
 
   .messages-inner {
-    padding: var(--space-lg) var(--space-xl);
+    padding: var(--space-md) var(--space-sm);
   }
 
   .input-area {
-    padding: var(--space-md) var(--space-lg) var(--space-lg);
+    padding: var(--space-sm);
+  }
+
+  .input-container {
+    padding: var(--space-sm);
+    gap: var(--space-sm);
   }
 
   .new-conv-container {
