@@ -22,10 +22,35 @@ def cmd_interactive(args):
     )
 
 
+def print_status(event):
+    """Print a status event to stderr for live feedback."""
+    from robot.status import StatusType
+
+    icons = {
+        StatusType.INIT: "→",
+        StatusType.THINKING: "·",
+        StatusType.TOOL_START: "▶",
+        StatusType.TOOL_COMPLETE: "✓",
+        StatusType.RESPONDING: "·",
+        StatusType.COMPLETE: "✓",
+        StatusType.ERROR: "✗",
+    }
+    icon = icons.get(event.type, "·")
+
+    # Use carriage return to overwrite the line
+    print(f"\r\033[K{icon} {event.message}", end="", flush=True, file=sys.stderr)
+
+    # Print newline for complete/error events
+    if event.type in (StatusType.COMPLETE, StatusType.ERROR):
+        print(file=sys.stderr)
+
+
 def cmd_run(args):
     """Run a prompt with an agent."""
     from robot import Robot
     from robot.base import AgentConfig
+
+    quiet = getattr(args, 'quiet', False)
 
     # Build config with timeout
     config_kwargs = {}
@@ -33,6 +58,11 @@ def cmd_run(args):
         config_kwargs["timeout"] = args.timeout
 
     config = AgentConfig(**config_kwargs) if config_kwargs else None
+
+    # Status callback for streaming (disabled in quiet mode)
+    on_status = None
+    if args.stream and not quiet:
+        on_status = print_status
 
     # Check for superagent mode
     if args.superagent and not args.no_superagent:
@@ -50,18 +80,19 @@ def cmd_run(args):
             working_dir=Path(args.dir) if args.dir else None,
         )
     else:
-        response = Robot.run(
+        agent = Robot.get(args.agent or "claude", config=config)
+        response = agent.run(
             prompt=args.prompt,
-            agent=args.agent,
             model=args.model,
             working_dir=Path(args.dir) if args.dir else None,
-            config=config,
+            on_status=on_status,
         )
 
     if response.success:
         print(response.content)
     else:
-        print(f"Error: {response.error}", file=sys.stderr)
+        if not quiet:
+            print(f"Error: {response.error}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -107,6 +138,69 @@ def cmd_check(args):
         sys.exit(1)
 
 
+def cmd_auth(args):
+    """Generate a one-time authentication link for the web interface."""
+    import secrets
+    import uuid
+    from datetime import datetime, timedelta, timezone
+    from pathlib import Path
+
+    from peewee import SqliteDatabase, Model, CharField, DateTimeField, BooleanField
+
+    from robot.config import settings
+
+    # Database setup (same as server.py)
+    DB_PATH = Path("/tmp/robot/robot_web.db")
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    db = SqliteDatabase(str(DB_PATH))
+
+    class BaseDBModel(Model):
+        class Meta:
+            database = db
+
+    class AuthCode(BaseDBModel):
+        id = CharField(primary_key=True, default=lambda: str(uuid.uuid4()))
+        code = CharField(unique=True, max_length=64)
+        created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+        expires_at = DateTimeField()
+        used = BooleanField(default=False)
+
+    # Ensure table exists
+    db.connect()
+    db.create_tables([AuthCode])
+
+    # Generate code
+    code = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    AuthCode.create(code=code, expires_at=expires_at)
+
+    # Build URL - use CLI args, then config, then defaults
+    host = args.host or settings.server_host
+    port = args.port or settings.server_port
+    url = f"http://{host}:{port}/api/auth/verify?code={code}"
+
+    print(f"\nAuthentication link (expires in 1 hour):\n")
+    print(f"  {url}\n")
+
+    # Display QR code if terminal supports it
+    try:
+        import qrcode
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=1,
+            border=1,
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+
+        print("Scan this QR code:\n")
+        qr.print_ascii(invert=True)
+        print()
+    except ImportError:
+        print("(Install 'qrcode' package for QR code display)")
+
+
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -137,6 +231,8 @@ def main():
     run_parser.add_argument("-m", "--model", default=None, help="Model to use")
     run_parser.add_argument("-d", "--dir", default=None, help="Working directory")
     run_parser.add_argument("-t", "--timeout", type=int, default=None, help="Timeout in seconds")
+    run_parser.add_argument("-s", "--stream", action="store_true", help="Show live status updates")
+    run_parser.add_argument("-q", "--quiet", action="store_true", help="Suppress status and error messages")
 
     # Superagent options
     run_parser.add_argument(
@@ -172,6 +268,12 @@ def main():
     check_parser = subparsers.add_parser("check", help="Check agent availability")
     check_parser.add_argument("agent", help="Agent to check")
     check_parser.set_defaults(func=cmd_check)
+
+    # auth command
+    auth_parser = subparsers.add_parser("auth", help="Generate web authentication link")
+    auth_parser.add_argument("--host", default=None, help="Server host (default: localhost)")
+    auth_parser.add_argument("--port", type=int, default=None, help="Server port (default: 9999)")
+    auth_parser.set_defaults(func=cmd_auth)
 
     args = parser.parse_args()
 

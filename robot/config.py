@@ -108,6 +108,14 @@ class Settings:
         default_factory=lambda: Path("/tmp/robot")
     )
 
+    # Web server settings
+    server_host: str = field(
+        default_factory=lambda: os.getenv("ROBOT_SERVER_HOST", "localhost")
+    )
+    server_port: int = field(
+        default_factory=lambda: int(os.getenv("ROBOT_SERVER_PORT", "9999"))
+    )
+
     def get_agent_path(self, agent: str) -> str:
         """Get CLI path for a specific agent."""
         paths = {

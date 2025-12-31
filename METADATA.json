@@ -1,0 +1,95 @@
+{
+  "name": "robot",
+  "short_description": "Unified Python interface for CLI-based coding agents with support for Claude, Codex, Gemini, and others.",
+  "long_description": "Robot is a Python framework that provides a consistent API for invoking multiple AI coding assistants (Claude Code, OpenAI Codex, Google Gemini, Mistral Vibe, Aider) in headless mode. It supports YAML-based prompt configuration, session resumption with cached context, superagent mode for spawning parallel subagents to handle complex multi-step tasks, and includes a web interface for interactive chat. Robot abstracts away differences between agent CLIs and provides streaming output, system prompts, tools, and model selection across different providers.",
+  "keywords": [
+    "ai-coding",
+    "coding-agents",
+    "cli-wrapper",
+    "claude",
+    "gemini",
+    "openai",
+    "agent-orchestration",
+    "superagent",
+    "prompt-management",
+    "web-interface",
+    "fastapi",
+    "llm-integration",
+    "code-generation",
+    "python-library",
+    "multi-agent"
+  ],
+  "primary_language": "Python",
+  "languages": [
+    "Python",
+    "HTML/CSS/JavaScript"
+  ],
+  "frameworks": [
+    "FastAPI",
+    "SQLite/Peewee",
+    "Prompt Toolkit",
+    "SSE Starlette"
+  ],
+  "modules": [
+    {
+      "path": "robot/__init__.py",
+      "description": "Main package exports for Robot - includes Robot registry, BaseAgent, SuperAgent, and AgentResponse classes."
+    },
+    {
+      "path": "robot/registry.py",
+      "description": "Agent factory and registry that discovers, registers, and instantiates coding agents dynamically."
+    },
+    {
+      "path": "robot/base.py",
+      "description": "Abstract BaseAgent class defining the interface for all agent implementations with subprocess execution, rate limiting, and retry logic."
+    },
+    {
+      "path": "robot/cli.py",
+      "description": "Command-line interface providing direct access to run prompts, tasks, check agents, and interactive mode with superagent support."
+    },
+    {
+      "path": "robot/interactive.py",
+      "description": "Interactive TUI mode for Robot using prompt_toolkit with live model/agent switching and multi-line input support."
+    },
+    {
+      "path": "robot/superagent.py",
+      "description": "SuperAgent class that wraps base agents to spawn and orchestrate up to 5 parallel subagents for complex multi-step tasks."
+    },
+    {
+      "path": "robot/server.py",
+      "description": "FastAPI web server providing REST API, JWT authentication, conversation management, and real-time chat interface for Robot."
+    },
+    {
+      "path": "robot/config.py",
+      "description": "Configuration management loading settings from environment variables and dotenv files."
+    },
+    {
+      "path": "robot/response.py",
+      "description": "AgentResponse class representing structured output from agents with parsed content, metadata, and tool usage tracking."
+    },
+    {
+      "path": "robot/status.py",
+      "description": "Status event tracking system for streaming output and real-time feedback on agent execution progress."
+    },
+    {
+      "path": "robot/prompt_loader.py",
+      "description": "YAML-based prompt configuration loader supporting templating and per-agent model specifications."
+    },
+    {
+      "path": "robot/agents/claude.py",
+      "description": "Claude Code CLI agent implementation with full tool support, JSON parsing, and system prompt configuration."
+    },
+    {
+      "path": "robot/agents/codex.py",
+      "description": "OpenAI Codex agent implementation providing access to GPT models via OpenAI API."
+    },
+    {
+      "path": "robot/agents/gemini.py",
+      "description": "Google Gemini agent implementation with streaming support and system prompt injection via temp files."
+    },
+    {
+      "path": "robot/agents/openrouter.py",
+      "description": "OpenRouter agent providing unified access to any model through OpenRouter API with convenient model aliases."
+    }
+  ]
+}

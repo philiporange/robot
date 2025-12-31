@@ -1,5 +1,7 @@
 # Robot
 
+<img src="assets/robot.svg" width="250" alt="Robot logo">
+
 Unified Python interface for CLI-based coding agents.
 
 ## Overview

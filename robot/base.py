@@ -17,6 +17,7 @@ from typing import Optional, Callable, Any
 
 from robot.config import settings
 from robot.response import AgentResponse
+from robot.status import StatusCallback, StatusEvent, StatusParser, StatusType
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +126,87 @@ class BaseAgent(ABC):
         except Exception as e:
             return -1, "", str(e)
 
+    def _run_streaming_subprocess(
+        self,
+        cmd: list[str],
+        working_dir: Optional[Path] = None,
+        timeout: Optional[int] = None,
+        env: Optional[dict[str, str]] = None,
+        on_status: Optional[StatusCallback] = None,
+    ) -> tuple[int, str, str]:
+        """
+        Run a subprocess with streaming output, parsing status events.
+
+        Args:
+            cmd: Command to run
+            working_dir: Working directory
+            timeout: Timeout in seconds
+            env: Additional environment variables to set
+            on_status: Callback for status events
+
+        Returns:
+            Tuple of (return_code, stdout, stderr)
+        """
+        import os
+        import select
+
+        timeout = timeout or self.timeout
+        cwd = working_dir or self.config.working_dir
+
+        # Merge additional env vars with current environment
+        proc_env = os.environ.copy()
+        if env:
+            proc_env.update(env)
+
+        logger.debug(f"Running (streaming): {' '.join(cmd[:4])}...")
+
+        parser = StatusParser(self.name)
+        stdout_lines = []
+        stderr_lines = []
+
+        try:
+            process = subprocess.Popen(
+                cmd,
+                cwd=cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=proc_env,
+            )
+
+            start_time = time.time()
+
+            # Read stdout line by line for streaming
+            while True:
+                # Check timeout
+                if time.time() - start_time > timeout:
+                    process.kill()
+                    return -1, "".join(stdout_lines), f"Timeout after {timeout}s"
+
+                line = process.stdout.readline()
+                if not line and process.poll() is not None:
+                    break
+
+                if line:
+                    stdout_lines.append(line)
+
+                    # Parse and emit status events
+                    if on_status:
+                        event = parser.parse_line(line)
+                        if event:
+                            on_status(event)
+
+            # Get any remaining stderr
+            stderr_output = process.stderr.read()
+            if stderr_output:
+                stderr_lines.append(stderr_output)
+
+            return_code = process.returncode
+            return return_code, "".join(stdout_lines), "".join(stderr_lines)
+
+        except Exception as e:
+            return -1, "".join(stdout_lines), str(e)
+
     @abstractmethod
     def get_cli_path(self) -> str:
         """Get the path to the CLI binary."""
@@ -176,6 +258,7 @@ class BaseAgent(ABC):
         system_prompt: Optional[str] = None,
         working_dir: Optional[Path] = None,
         on_retry: Optional[Callable[[int, str], None]] = None,
+        on_status: Optional[StatusCallback] = None,
         **kwargs,
     ) -> AgentResponse:
         """
@@ -187,6 +270,7 @@ class BaseAgent(ABC):
             system_prompt: System prompt (if supported)
             working_dir: Working directory for execution
             on_retry: Callback for retry attempts
+            on_status: Callback for streaming status events
             **kwargs: Additional agent-specific arguments
 
         Returns:

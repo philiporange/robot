@@ -3,7 +3,8 @@ Interactive TUI mode for Robot.
 
 Provides a terminal-based interactive interface that mimics the interactive
 modes of underlying CLI tools. Supports multi-line input, command history,
-and streaming output.
+streaming output, and persistent action summaries showing commands and file
+operations performed during each response.
 """
 
 import os
@@ -314,28 +315,184 @@ def read_multiline_input() -> Optional[str]:
         return ""
 
 
+# Action type configurations for CLI display
+ACTION_CONFIGS = {
+    "Bash": {"icon": "⚡", "color": "\033[33m", "type": "command"},  # Yellow
+    "Read": {"icon": "📖", "color": "\033[34m", "type": "read"},     # Blue
+    "Write": {"icon": "✏️ ", "color": "\033[32m", "type": "write"},   # Green
+    "Edit": {"icon": "🔧", "color": "\033[35m", "type": "edit"},     # Purple
+    "Glob": {"icon": "🔍", "color": "\033[36m", "type": "search"},   # Cyan
+    "Grep": {"icon": "🔎", "color": "\033[36m", "type": "search"},   # Cyan
+    "Task": {"icon": "🤖", "color": "\033[95m", "type": "agent"},    # Pink
+    "TodoWrite": {"icon": "📋", "color": "\033[90m", "type": "tool"}, # Gray
+    "WebFetch": {"icon": "🌐", "color": "\033[96m", "type": "web"},   # Teal
+    "WebSearch": {"icon": "🔍", "color": "\033[96m", "type": "web"},  # Teal
+}
+RESET_COLOR = "\033[0m"
+
+
+def event_to_action(event):
+    """Convert a status event to an action dict for display."""
+    from robot.status import StatusType
+
+    if event.type != StatusType.TOOL_START or not event.tool_name:
+        return None
+
+    tool_name = event.tool_name
+    config = ACTION_CONFIGS.get(tool_name, {"icon": "🔧", "color": "\033[90m", "type": "tool"})
+
+    # Extract meaningful detail from tool input
+    detail = ""
+    name = tool_name
+
+    if event.tool_input:
+        if tool_name == "Bash":
+            cmd = event.tool_input.get("command", "")
+            desc = event.tool_input.get("description", "")
+            name = desc if desc else (cmd[:50] + "..." if len(cmd) > 50 else cmd)
+            detail = cmd
+        elif tool_name in ("Read", "Write", "Edit"):
+            path = event.tool_input.get("file_path", "")
+            name = path.split("/")[-1] if path else tool_name
+            detail = path
+        elif tool_name == "Glob":
+            pattern = event.tool_input.get("pattern", "")
+            name = f"glob: {pattern}"
+            detail = pattern
+        elif tool_name == "Grep":
+            pattern = event.tool_input.get("pattern", "")
+            name = f"grep: {pattern[:30]}" if len(pattern) > 30 else f"grep: {pattern}"
+            detail = pattern
+        elif tool_name == "Task":
+            desc = event.tool_input.get("description", "")
+            name = desc if desc else "Subagent"
+            detail = event.tool_input.get("prompt", "")[:100]
+        else:
+            name = event.message[:50] if event.message else tool_name
+            detail = str(event.tool_input)[:100]
+
+    return {
+        "type": config["type"],
+        "name": name,
+        "detail": detail,
+        "icon": config["icon"],
+        "color": config["color"],
+    }
+
+
+def print_actions_summary(actions):
+    """Print a summary of actions taken during the response."""
+    if not actions:
+        return
+
+    print("\n╭─ Actions ─────────────────────────────────╮")
+    for action in actions:
+        icon = action["icon"]
+        color = action["color"]
+        name = action["name"]
+        # Truncate long names
+        if len(name) > 42:
+            name = name[:39] + "..."
+        print(f"│ {icon} {color}{name}{RESET_COLOR}")
+    print("╰───────────────────────────────────────────╯")
+
+
+# Global list to collect actions during execution
+_collected_actions = []
+
+
+def print_interactive_status(event):
+    """Print a status event with live updates in interactive mode."""
+    from robot.status import StatusType
+
+    # Collect actions
+    action = event_to_action(event)
+    if action:
+        _collected_actions.append(action)
+
+    icons = {
+        StatusType.INIT: "→",
+        StatusType.THINKING: "·",
+        StatusType.TOOL_START: "▶",
+        StatusType.TOOL_COMPLETE: "✓",
+        StatusType.RESPONDING: "·",
+        StatusType.COMPLETE: "✓",
+        StatusType.ERROR: "✗",
+    }
+    icon = icons.get(event.type, "·")
+
+    # Use carriage return to overwrite the status line
+    print(f"\r\033[K  {icon} {event.message}", end="", flush=True)
+
+    # Print newline for complete/error events
+    if event.type in (StatusType.COMPLETE, StatusType.ERROR):
+        print()
+
+
 def run_prompt_interactive(prompt: str, config: InteractiveConfig):
     """
-    Run a prompt using the underlying CLI tool directly for streaming output.
+    Run a prompt using the Robot API with live status updates.
 
     Args:
         prompt: The prompt to send
         config: Current configuration
     """
+    global _collected_actions
+    from robot import Robot
+    from robot.base import AgentConfig
+
+    # Use Robot API for Claude to get status updates
+    if config.agent == "claude":
+        agent_config = AgentConfig(
+            model=config.model,
+            working_dir=config.working_dir,
+        )
+
+        if config.superagent:
+            from robot.superagent import get_superagent_prefix
+            agent_config.prompt_prefix = get_superagent_prefix(
+                max_subagents=config.max_subagents,
+                subagent_timeout=config.subagent_timeout,
+                working_dir=config.working_dir,
+            )
+
+        try:
+            # Clear collected actions
+            _collected_actions = []
+
+            print()  # Blank line before status
+            agent = Robot.get(config.agent, config=agent_config)
+            response = agent.run(
+                prompt=prompt,
+                working_dir=config.working_dir,
+                on_status=print_interactive_status,
+            )
+
+            # Print actions summary
+            if _collected_actions:
+                print_actions_summary(_collected_actions)
+
+            if response.success:
+                print(response.content)
+            else:
+                print(f"\nError: {response.error}")
+            print()
+
+        except KeyboardInterrupt:
+            print("\n(Interrupted)")
+        except Exception as e:
+            print(f"\nError: {e}")
+        return
+
+    # For other agents, fall back to CLI-based execution
     cli_path = get_cli_path(config.agent)
 
     if not cli_path:
-        # Fall back to robot run command
         run_prompt_via_robot(prompt, config)
         return
 
     # Build command based on agent
-    if config.agent == "claude":
-        cmd = [cli_path, "-p", prompt, "--model", config.model]
-        if config.working_dir:
-            cmd.extend(["--add-dir", str(config.working_dir)])
-
-    elif config.agent == "codex":
+    if config.agent == "codex":
         cmd = [cli_path, prompt, "--model", config.model, "--approval-mode", "full-auto"]
 
     elif config.agent == "gemini":
@@ -347,7 +504,6 @@ def run_prompt_interactive(prompt: str, config: InteractiveConfig):
     elif config.agent in ("aider", "openrouter"):
         model = config.model
         if config.agent == "openrouter" and not model.startswith("openrouter/"):
-            # Resolve OpenRouter model aliases
             from robot.agents.openrouter import OpenRouterAgent
             agent = OpenRouterAgent()
             model = agent._resolve_model(model)
@@ -358,23 +514,6 @@ def run_prompt_interactive(prompt: str, config: InteractiveConfig):
     else:
         run_prompt_via_robot(prompt, config)
         return
-
-    # Add superagent prefix if enabled
-    if config.superagent:
-        from robot.superagent import get_superagent_prefix
-        prefix = get_superagent_prefix(
-            max_subagents=config.max_subagents,
-            subagent_timeout=config.subagent_timeout,
-            working_dir=config.working_dir,
-        )
-        # For Claude, use --append-system-prompt
-        if config.agent == "claude":
-            cmd.extend(["--append-system-prompt", prefix])
-        else:
-            # For others, we'd need to modify the prompt
-            # Fall back to robot run for proper handling
-            run_prompt_via_robot(prompt, config)
-            return
 
     # Run with streaming output
     try:
@@ -388,7 +527,6 @@ def run_prompt_interactive(prompt: str, config: InteractiveConfig):
             bufsize=1,
         )
 
-        # Stream output line by line
         print()
         for line in process.stdout:
             print(line, end="", flush=True)

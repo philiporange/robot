@@ -8,25 +8,22 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Syntax highlighting -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlightjs-line-numbers.js/2.8.0/highlightjs-line-numbers.min.js"></script>
+    <!-- Diff rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html/bundles/css/diff2html.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/diff2html/bundles/js/diff2html.min.js"></script>
 </head>
 <body>
     <!-- Auth Modal -->
     <div id="authModal" class="modal-overlay">
         <div class="auth-container">
             <h1 class="auth-title">Robot</h1>
-            <form id="authForm" class="auth-form">
-                <input type="text" id="authUsername" required placeholder="Username" class="auth-input">
-                <input type="password" id="authPassword" required placeholder="Password" class="auth-input">
-                <div id="authError" class="auth-error hidden"></div>
-                <div class="auth-actions">
-                    <button type="submit" class="auth-submit">
-                        <span id="authSubmitText">Sign In</span>
-                    </button>
-                    <button type="button" id="toggleAuth" class="auth-toggle">Create account</button>
-                </div>
-            </form>
+            <p class="auth-message">To authenticate, run:</p>
+            <code class="auth-command">robot auth</code>
+            <p class="auth-hint">Then visit the generated link or scan the QR code.</p>
         </div>
     </div>
 
@@ -90,13 +87,51 @@
         </div>
     </div>
 
+    <!-- Browser Modal -->
+    <div id="browserModal" class="modal-overlay hidden">
+        <div class="browser-container">
+            <div class="modal-header">
+                <div class="browser-header-left">
+                    <button id="browserBackBtn" class="browser-nav-btn" title="Back">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/>
+                        </svg>
+                    </button>
+                    <div id="browserBreadcrumb" class="browser-breadcrumb"></div>
+                </div>
+                <button id="closeBrowserBtn" class="close-btn">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="browserContent" class="browser-content">
+                <div id="browserList" class="browser-list"></div>
+                <div id="browserFile" class="browser-file hidden">
+                    <div class="browser-file-header">
+                        <span id="browserFileName" class="browser-file-name"></span>
+                        <span id="browserFileSize" class="browser-file-size"></span>
+                    </div>
+                    <pre id="browserFileContent" class="browser-file-content"><code></code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Layout -->
     <div class="layout">
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
                 <span class="logo">Robot</span>
-                <button id="logoutBtn" class="logout-btn">Logout</button>
+                <div class="sidebar-header-actions">
+                    <button id="browseBtn" class="header-action-btn" title="Browse Code">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                        </svg>
+                    </button>
+                    <button id="logoutBtn" class="logout-btn">Logout</button>
+                </div>
             </div>
             <button id="newConvBtn" class="new-conv-btn">New</button>
             <nav id="convList" class="conv-list"></nav>
@@ -104,18 +139,6 @@
 
         <!-- Main Content -->
         <main class="main">
-            <!-- Chat Header -->
-            <header id="chatHeader" class="chat-header hidden">
-                <div class="header-info">
-                    <h2 id="convTitleDisplay" class="conv-title"></h2>
-                    <p id="convPath" class="conv-path"></p>
-                </div>
-                <div class="header-actions">
-                    <span id="convModel" class="conv-model"></span>
-                    <button id="showFilesBtn" class="files-btn hidden">Files</button>
-                </div>
-            </header>
-
             <!-- Modified Files Panel -->
             <div id="filesPanel" class="files-panel hidden">
                 <div class="files-header">
@@ -139,12 +162,22 @@
             <!-- Input Area -->
             <div id="inputArea" class="input-area hidden">
                 <div class="input-container">
-                    <textarea id="messageInput" rows="1" placeholder="Message..." class="message-input"></textarea>
-                    <button id="sendBtn" class="send-btn">
-                        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 5l7 7-7 7M5 12h15"/>
-                        </svg>
-                    </button>
+                    <div class="input-main">
+                        <textarea id="messageInput" rows="1" placeholder="Message..." class="message-input"></textarea>
+                        <button id="sendBtn" class="send-btn">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 5l7 7-7 7M5 12h15"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="input-meta">
+                        <span id="convTitleDisplay" class="meta-item meta-title"></span>
+                        <span class="meta-divider">•</span>
+                        <span id="convPath" class="meta-item meta-path"></span>
+                        <span class="meta-divider">•</span>
+                        <span id="convModel" class="meta-item meta-model"></span>
+                        <button id="showFilesBtn" class="files-btn-mini hidden">Files</button>
+                    </div>
                 </div>
                 <div id="statusBar" class="status-bar hidden">
                     <span class="thinking-text">Thinking</span>

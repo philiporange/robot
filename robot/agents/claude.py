@@ -7,13 +7,15 @@ JSON output parsing, and system prompt configuration.
 
 import json
 import logging
+import time
 from pathlib import Path
-from typing import Optional, Any
+from typing import Callable, Optional, Any
 
 from robot.base import BaseAgent, AgentConfig
 from robot.config import settings
 from robot.registry import register_agent
 from robot.response import AgentResponse
+from robot.status import StatusCallback, StatusEvent, StatusType
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +32,11 @@ class ClaudeAgent(BaseAgent):
     supports_resume = True
     default_model = "sonnet"
 
-    # Model aliases
+    # Model aliases - use short names, CLI will resolve to latest versions
     MODEL_ALIASES = {
-        "haiku": "claude-haiku-4-20250414",
-        "sonnet": "claude-sonnet-4-20250514",
-        "opus": "claude-opus-4-20250514",
+        "haiku": "haiku",
+        "sonnet": "sonnet",
+        "opus": "opus",
     }
 
     # Default tools for file operations
@@ -144,7 +146,156 @@ class ClaudeAgent(BaseAgent):
         for d in dirs_to_add:
             cmd.extend(["--add-dir", str(d)])
 
+        # Skip permission prompts for headless operation
+        cmd.append("--dangerously-skip-permissions")
+
         return cmd
+
+    def run(
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        working_dir: Optional[Path] = None,
+        on_retry: Optional[Callable[[int, str], None]] = None,
+        on_status: Optional[StatusCallback] = None,
+        **kwargs,
+    ) -> AgentResponse:
+        """
+        Execute Claude with the given prompt.
+
+        When on_status is provided, uses streaming mode for real-time updates.
+
+        Args:
+            prompt: The prompt to send
+            model: Model to use
+            system_prompt: System prompt
+            working_dir: Working directory
+            on_retry: Callback for retry attempts
+            on_status: Callback for streaming status events
+            **kwargs: Additional arguments
+
+        Returns:
+            AgentResponse with results
+        """
+        model = model or self.config.model or self.default_model
+        system_prompt = system_prompt or self.config.system_prompt
+        working_dir = working_dir or self.config.working_dir
+
+        # Use streaming mode when on_status is provided
+        if on_status:
+            return self._run_streaming(
+                prompt=prompt,
+                model=model,
+                system_prompt=system_prompt,
+                working_dir=working_dir,
+                on_status=on_status,
+                **kwargs,
+            )
+
+        # Otherwise use standard non-streaming mode
+        return super().run(
+            prompt=prompt,
+            model=model,
+            system_prompt=system_prompt,
+            working_dir=working_dir,
+            on_retry=on_retry,
+            **kwargs,
+        )
+
+    def _run_streaming(
+        self,
+        prompt: str,
+        model: str,
+        system_prompt: Optional[str],
+        working_dir: Optional[Path],
+        on_status: StatusCallback,
+        **kwargs,
+    ) -> AgentResponse:
+        """
+        Run Claude with streaming output for real-time status updates.
+
+        Uses stream-json output format and parses events as they arrive.
+        """
+        # Build command with streaming output format
+        cmd = self.build_command(
+            prompt=prompt,
+            model=model,
+            system_prompt=system_prompt,
+            output_format="stream-json",
+            **kwargs,
+        )
+
+        # Add --verbose required for stream-json
+        cmd.append("--verbose")
+
+        env_vars = self.get_env_vars()
+        start_time = time.time()
+
+        logger.info(f"Running {self.name} (streaming): model={model}")
+
+        self._rate_limit()
+
+        return_code, stdout, stderr = self._run_streaming_subprocess(
+            cmd,
+            working_dir=working_dir,
+            timeout=self.timeout,
+            env=env_vars,
+            on_status=on_status,
+        )
+
+        duration = time.time() - start_time
+
+        # Parse final result from stream output
+        success, content = self._parse_streaming_output(stdout)
+
+        if success:
+            logger.info(f"Success: {len(content)} chars in {duration:.1f}s")
+            return AgentResponse(
+                success=True,
+                content=content,
+                raw_output=stdout,
+                agent=self.name,
+                model=model,
+                duration=duration,
+            )
+        else:
+            error = content or stderr or f"Exit code: {return_code}"
+            logger.error(f"Failed: {error}")
+            return AgentResponse(
+                success=False,
+                content="",
+                raw_output=stdout,
+                agent=self.name,
+                model=model,
+                duration=duration,
+                error=error,
+            )
+
+    def _parse_streaming_output(self, stdout: str) -> tuple[bool, str]:
+        """
+        Parse streaming JSON output to extract final result.
+
+        Returns:
+            Tuple of (success, content)
+        """
+        # Look for the result event in the stream
+        for line in stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            try:
+                event = json.loads(line)
+                if event.get("type") == "result":
+                    success = event.get("subtype") == "success"
+                    content = event.get("result", "")
+                    if not success:
+                        content = event.get("error", content)
+                    return success, content
+            except json.JSONDecodeError:
+                continue
+
+        # No result event found, try to extract any content
+        return False, "No result in stream output"
 
     def parse_output(self, stdout: str, stderr: str) -> tuple[bool, str]:
         """
