@@ -343,7 +343,3 @@ Access the interface at http://localhost:8000
 # JWT secret for token signing (auto-generated if not set)
 ROBOT_JWT_SECRET=your-secret-key
 ```
-
-## License
-
-CC0

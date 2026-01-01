@@ -5,21 +5,10 @@ Provides direct CLI access to run prompts, tasks, and check agent availability.
 Supports superagent mode for spawning subagents and interactive TUI mode.
 """
 
-import argparse
 import sys
 from pathlib import Path
 
-
-def cmd_interactive(args):
-    """Run in interactive mode."""
-    from robot.interactive import run_interactive
-
-    run_interactive(
-        agent=args.agent,
-        model=args.model,
-        working_dir=Path(args.dir) if args.dir else None,
-        superagent=args.superagent,
-    )
+import click
 
 
 def print_status(event):
@@ -38,112 +27,173 @@ def print_status(event):
     icon = icons.get(event.type, "·")
 
     # Use carriage return to overwrite the line
-    print(f"\r\033[K{icon} {event.message}", end="", flush=True, file=sys.stderr)
+    click.echo(f"\r\033[K{icon} {event.message}", nl=False, err=True)
 
     # Print newline for complete/error events
     if event.type in (StatusType.COMPLETE, StatusType.ERROR):
-        print(file=sys.stderr)
+        click.echo(err=True)
 
 
-def cmd_run(args):
-    """Run a prompt with an agent."""
+@click.group(invoke_without_command=True)
+@click.option("-a", "--agent", default=None, help="Agent to use (default: claude)")
+@click.option("-m", "--model", default=None, help="Model to use (default: opus)")
+@click.option("-d", "--dir", "working_dir", default=None, help="Working directory")
+@click.option("--superagent", is_flag=True, help="Enable superagent mode")
+@click.pass_context
+def cli(ctx, agent, model, working_dir, superagent):
+    """Unified interface for CLI coding agents."""
+    ctx.ensure_object(dict)
+    ctx.obj["agent"] = agent
+    ctx.obj["model"] = model
+    ctx.obj["working_dir"] = working_dir
+    ctx.obj["superagent"] = superagent
+
+    if ctx.invoked_subcommand is None:
+        # Default to interactive mode
+        ctx.invoke(
+            interactive,
+            agent=agent,
+            model=model,
+            working_dir=working_dir,
+            superagent=superagent,
+        )
+
+
+@cli.command("interactive")
+@click.option("-a", "--agent", default=None, help="Agent to use")
+@click.option("-m", "--model", default=None, help="Model to use (default: opus)")
+@click.option("-d", "--dir", "working_dir", default=None, help="Working directory")
+@click.option("--superagent", is_flag=True, help="Enable superagent mode")
+def interactive(agent, model, working_dir, superagent):
+    """Interactive mode (default)."""
+    from robot.interactive import run_interactive
+
+    run_interactive(
+        agent=agent,
+        model=model,
+        working_dir=Path(working_dir) if working_dir else None,
+        superagent=superagent,
+    )
+
+
+@cli.command()
+@click.argument("prompt")
+@click.option("-a", "--agent", default=None, help="Agent to use")
+@click.option("-m", "--model", default=None, help="Model to use")
+@click.option("-d", "--dir", "working_dir", default=None, help="Working directory")
+@click.option("-t", "--timeout", type=int, default=None, help="Timeout in seconds")
+@click.option("-s", "--stream", is_flag=True, help="Show live status updates")
+@click.option("-q", "--quiet", is_flag=True, help="Suppress status and error messages")
+@click.option("--superagent", is_flag=True, help="Enable superagent mode (can spawn subagents)")
+@click.option("--no-superagent", is_flag=True, help="Disable superagent capabilities (used for subagents)")
+@click.option("--max-subagents", type=int, default=None, help="Maximum number of subagents (default: 5)")
+@click.option("--subagent-timeout", type=int, default=None, help="Timeout per subagent in seconds (default: 300)")
+def run(prompt, agent, model, working_dir, timeout, stream, quiet, superagent, no_superagent, max_subagents, subagent_timeout):
+    """Run a single prompt."""
     from robot import Robot
     from robot.base import AgentConfig
 
-    quiet = getattr(args, 'quiet', False)
-
     # Build config with timeout
     config_kwargs = {}
-    if args.timeout:
-        config_kwargs["timeout"] = args.timeout
+    if timeout:
+        config_kwargs["timeout"] = timeout
 
     config = AgentConfig(**config_kwargs) if config_kwargs else None
 
     # Status callback for streaming (disabled in quiet mode)
     on_status = None
-    if args.stream and not quiet:
+    if stream and not quiet:
         on_status = print_status
 
     # Check for superagent mode
-    if args.superagent and not args.no_superagent:
+    if superagent and not no_superagent:
         from robot.superagent import SuperAgent, DEFAULT_SUBAGENT_TIMEOUT, MAX_SUBAGENTS
 
-        base_agent = Robot.get(args.agent or "claude", config=config)
-        agent = SuperAgent(
+        base_agent = Robot.get(agent or "claude", config=config)
+        agent_instance = SuperAgent(
             base_agent,
-            max_subagents=args.max_subagents or MAX_SUBAGENTS,
-            subagent_timeout=args.subagent_timeout or DEFAULT_SUBAGENT_TIMEOUT,
+            max_subagents=max_subagents or MAX_SUBAGENTS,
+            subagent_timeout=subagent_timeout or DEFAULT_SUBAGENT_TIMEOUT,
         )
-        response = agent.run(
-            prompt=args.prompt,
-            model=args.model,
-            working_dir=Path(args.dir) if args.dir else None,
+        response = agent_instance.run(
+            prompt=prompt,
+            model=model,
+            working_dir=Path(working_dir) if working_dir else None,
         )
     else:
-        agent = Robot.get(args.agent or "claude", config=config)
-        response = agent.run(
-            prompt=args.prompt,
-            model=args.model,
-            working_dir=Path(args.dir) if args.dir else None,
+        agent_instance = Robot.get(agent or "claude", config=config)
+        response = agent_instance.run(
+            prompt=prompt,
+            model=model,
+            working_dir=Path(working_dir) if working_dir else None,
             on_status=on_status,
         )
 
     if response.success:
-        print(response.content)
+        click.echo(response.content)
     else:
         if not quiet:
-            print(f"Error: {response.error}", file=sys.stderr)
+            click.echo(f"Error: {response.error}", err=True)
         sys.exit(1)
 
 
-def cmd_task(args):
+@cli.command()
+@click.argument("task")
+@click.option("-a", "--agent", default=None, help="Agent to use")
+@click.option("-d", "--dir", "working_dir", default=None, help="Working directory")
+def task(task, agent, working_dir):
     """Run a predefined task."""
     from robot import Robot
 
     response = Robot.run_task(
-        task=args.task,
-        agent=args.agent,
-        working_dir=Path(args.dir) if args.dir else None,
+        task=task,
+        agent=agent,
+        working_dir=Path(working_dir) if working_dir else None,
     )
 
     if response.success:
-        print(response.content)
+        click.echo(response.content)
     else:
-        print(f"Error: {response.error}", file=sys.stderr)
+        click.echo(f"Error: {response.error}", err=True)
         sys.exit(1)
 
 
-def cmd_list(args):
+@cli.command("list")
+def list_agents():
     """List available agents."""
     from robot import Robot
 
-    print("Registered agents:")
+    click.echo("Registered agents:")
     for name in Robot.list_registered():
-        print(f"  - {name}")
+        click.echo(f"  - {name}")
 
-    print("\nAvailable (installed):")
+    click.echo("\nAvailable (installed):")
     for name in Robot.list_available():
-        print(f"  - {name}")
+        click.echo(f"  - {name}")
 
 
-def cmd_check(args):
+@cli.command()
+@click.argument("agent")
+def check(agent):
     """Check agent availability."""
     from robot import Robot
 
-    agent = Robot.get(args.agent)
-    if agent.is_available():
-        print(f"{args.agent}: available at {agent.get_cli_path()}")
+    agent_instance = Robot.get(agent)
+    if agent_instance.is_available():
+        click.echo(f"{agent}: available at {agent_instance.get_cli_path()}")
     else:
-        print(f"{args.agent}: not found")
+        click.echo(f"{agent}: not found")
         sys.exit(1)
 
 
-def cmd_auth(args):
-    """Generate a one-time authentication link for the web interface."""
+@cli.command()
+@click.option("--host", default=None, help="Server host (default: localhost)")
+@click.option("--port", type=int, default=None, help="Server port (default: 9999)")
+def auth(host, port):
+    """Generate web authentication link."""
     import secrets
     import uuid
     from datetime import datetime, timedelta, timezone
-    from pathlib import Path
 
     from peewee import SqliteDatabase, Model, CharField, DateTimeField, BooleanField
 
@@ -175,12 +225,12 @@ def cmd_auth(args):
     AuthCode.create(code=code, expires_at=expires_at)
 
     # Build URL - use CLI args, then config, then defaults
-    host = args.host or settings.server_host
-    port = args.port or settings.server_port
-    url = f"http://{host}:{port}/api/auth/verify?code={code}"
+    server_host = host or settings.server_host
+    server_port = port or settings.server_port
+    url = f"http://{server_host}:{server_port}/api/auth/verify?code={code}"
 
-    print(f"\nAuthentication link (expires in 1 hour):\n")
-    print(f"  {url}\n")
+    click.echo(f"\nAuthentication link (expires in 1 hour):\n")
+    click.echo(f"  {url}\n")
 
     # Display QR code if terminal supports it
     try:
@@ -194,94 +244,16 @@ def cmd_auth(args):
         qr.add_data(url)
         qr.make(fit=True)
 
-        print("Scan this QR code:\n")
+        click.echo("Scan this QR code:\n")
         qr.print_ascii(invert=True)
-        print()
+        click.echo()
     except ImportError:
-        print("(Install 'qrcode' package for QR code display)")
+        click.echo("(Install 'qrcode' package for QR code display)")
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        prog="robot",
-        description="Unified interface for CLI coding agents",
-    )
-
-    # Global options for interactive mode (when no subcommand)
-    parser.add_argument("-a", "--agent", default=None, help="Agent to use (default: claude)")
-    parser.add_argument("-m", "--model", default=None, help="Model to use (default: opus)")
-    parser.add_argument("-d", "--dir", default=None, help="Working directory")
-    parser.add_argument("--superagent", action="store_true", help="Enable superagent mode")
-
-    subparsers = parser.add_subparsers(dest="command", help="Commands")
-
-    # interactive command (explicit)
-    interactive_parser = subparsers.add_parser("interactive", aliases=["i"], help="Interactive mode (default)")
-    interactive_parser.add_argument("-a", "--agent", default=None, help="Agent to use")
-    interactive_parser.add_argument("-m", "--model", default=None, help="Model to use (default: opus)")
-    interactive_parser.add_argument("-d", "--dir", default=None, help="Working directory")
-    interactive_parser.add_argument("--superagent", action="store_true", help="Enable superagent mode")
-    interactive_parser.set_defaults(func=cmd_interactive)
-
-    # run command
-    run_parser = subparsers.add_parser("run", help="Run a single prompt")
-    run_parser.add_argument("prompt", help="Prompt to send")
-    run_parser.add_argument("-a", "--agent", default=None, help="Agent to use")
-    run_parser.add_argument("-m", "--model", default=None, help="Model to use")
-    run_parser.add_argument("-d", "--dir", default=None, help="Working directory")
-    run_parser.add_argument("-t", "--timeout", type=int, default=None, help="Timeout in seconds")
-    run_parser.add_argument("-s", "--stream", action="store_true", help="Show live status updates")
-    run_parser.add_argument("-q", "--quiet", action="store_true", help="Suppress status and error messages")
-
-    # Superagent options
-    run_parser.add_argument(
-        "--superagent", action="store_true",
-        help="Enable superagent mode (can spawn subagents)"
-    )
-    run_parser.add_argument(
-        "--no-superagent", action="store_true",
-        help="Disable superagent capabilities (used for subagents)"
-    )
-    run_parser.add_argument(
-        "--max-subagents", type=int, default=None,
-        help="Maximum number of subagents (default: 5)"
-    )
-    run_parser.add_argument(
-        "--subagent-timeout", type=int, default=None,
-        help="Timeout per subagent in seconds (default: 300)"
-    )
-    run_parser.set_defaults(func=cmd_run)
-
-    # task command
-    task_parser = subparsers.add_parser("task", help="Run a predefined task")
-    task_parser.add_argument("task", help="Task name (e.g., readme, review)")
-    task_parser.add_argument("-a", "--agent", default=None, help="Agent to use")
-    task_parser.add_argument("-d", "--dir", default=None, help="Working directory")
-    task_parser.set_defaults(func=cmd_task)
-
-    # list command
-    list_parser = subparsers.add_parser("list", help="List available agents")
-    list_parser.set_defaults(func=cmd_list)
-
-    # check command
-    check_parser = subparsers.add_parser("check", help="Check agent availability")
-    check_parser.add_argument("agent", help="Agent to check")
-    check_parser.set_defaults(func=cmd_check)
-
-    # auth command
-    auth_parser = subparsers.add_parser("auth", help="Generate web authentication link")
-    auth_parser.add_argument("--host", default=None, help="Server host (default: localhost)")
-    auth_parser.add_argument("--port", type=int, default=None, help="Server port (default: 9999)")
-    auth_parser.set_defaults(func=cmd_auth)
-
-    args = parser.parse_args()
-
-    if args.command is None:
-        # Default to interactive mode
-        cmd_interactive(args)
-    else:
-        args.func(args)
+    cli()
 
 
 if __name__ == "__main__":
