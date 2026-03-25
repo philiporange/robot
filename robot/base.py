@@ -77,6 +77,16 @@ class BaseAgent(ABC):
         unique_id = uuid.uuid4().hex[:12]
         return self.temp_dir / f"{unique_id}{suffix}"
 
+    def _get_base_env(self) -> dict[str, str]:
+        """
+        Get the base environment for subprocesses.
+
+        Override in subclasses to filter or modify the inherited
+        environment before agent-specific vars are applied.
+        """
+        import os
+        return os.environ.copy()
+
     def _run_subprocess(
         self,
         cmd: list[str],
@@ -98,13 +108,11 @@ class BaseAgent(ABC):
         Returns:
             Tuple of (return_code, stdout, stderr)
         """
-        import os
-
         timeout = timeout or self.timeout
         cwd = working_dir or self.config.working_dir
 
         # Merge additional env vars with current environment
-        proc_env = os.environ.copy()
+        proc_env = self._get_base_env()
         if env:
             proc_env.update(env)
 
@@ -147,14 +155,11 @@ class BaseAgent(ABC):
         Returns:
             Tuple of (return_code, stdout, stderr)
         """
-        import os
-        import select
-
         timeout = timeout or self.timeout
         cwd = working_dir or self.config.working_dir
 
         # Merge additional env vars with current environment
-        proc_env = os.environ.copy()
+        proc_env = self._get_base_env()
         if env:
             proc_env.update(env)
 

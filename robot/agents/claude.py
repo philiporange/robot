@@ -2,7 +2,9 @@
 Claude Code CLI agent implementation.
 
 Wraps the `claude` CLI for headless execution with full tool support,
-JSON output parsing, and system prompt configuration.
+JSON output parsing, and system prompt configuration. Strips inherited
+ANTHROPIC env vars from the subprocess environment so the CLI defaults
+to OAuth subscription auth unless an API key is explicitly configured.
 """
 
 import json
@@ -46,11 +48,26 @@ class ClaudeAgent(BaseAgent):
         """Get the path to the Claude CLI."""
         return settings.claude_path
 
+    def _get_base_env(self) -> dict[str, str]:
+        """
+        Get base environment with ANTHROPIC vars stripped.
+
+        Prevents leaked ANTHROPIC_API_KEY (e.g. from dotenv loading ~/.env)
+        from overriding OAuth subscription auth in the Claude CLI.
+        Explicitly configured keys are re-added via get_env_vars().
+        """
+        import os
+        env = os.environ.copy()
+        env.pop("ANTHROPIC_API_KEY", None)
+        env.pop("ANTHROPIC_AUTH_TOKEN", None)
+        return env
+
     def get_env_vars(self) -> dict[str, str]:
         """
         Get environment variables for Claude CLI.
 
-        Sets ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN if configured.
+        Sets ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL if explicitly configured.
+        When no key is configured, vars are left unset so the CLI uses OAuth.
         """
         env = {}
 
@@ -59,7 +76,7 @@ class ClaudeAgent(BaseAgent):
         base_url = self.config.base_url or settings.claude_base_url
 
         if api_key:
-            env["ANTHROPIC_AUTH_TOKEN"] = api_key
+            env["ANTHROPIC_API_KEY"] = api_key
         if base_url:
             env["ANTHROPIC_BASE_URL"] = base_url
 
