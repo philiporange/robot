@@ -59,6 +59,9 @@ class ClaudeAgent(BaseAgent):
         import os
         env = os.environ.copy()
         env.pop("ANTHROPIC_API_KEY", None)
+        # ANTHROPIC_AUTH_TOKEN is the Claude CLI's proxy/gateway auth var
+        # (used by Z.ai etc). Different from ANTHROPIC_API_KEY but also
+        # causes the CLI to skip OAuth if present.
         env.pop("ANTHROPIC_AUTH_TOKEN", None)
         return env
 
