@@ -38,7 +38,7 @@ class Settings:
 
     # Claude API configuration
     claude_api_key: Optional[str] = field(
-        default_factory=lambda: os.getenv("ROBOT_CLAUDE_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")
+        default_factory=lambda: os.getenv("ROBOT_CLAUDE_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
     )
     claude_base_url: Optional[str] = field(
         default_factory=lambda: os.getenv("ROBOT_CLAUDE_BASE_URL") or os.getenv("ANTHROPIC_BASE_URL")

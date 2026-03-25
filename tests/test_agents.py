@@ -91,7 +91,7 @@ def test_claude_agent_env_vars():
     agent = Robot.get("claude", config=config)
     env = agent.get_env_vars()
 
-    assert env.get("ANTHROPIC_AUTH_TOKEN") == "test-anthropic-key"
+    assert env.get("ANTHROPIC_API_KEY") == "test-anthropic-key"
     assert env.get("ANTHROPIC_BASE_URL") == "https://api.z.ai/api/anthropic"
 
 
