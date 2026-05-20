@@ -29,6 +29,7 @@ MODEL_AGENT_MAP = {
     "claude-haiku-4": "claude",
     # OpenAI/Codex models -> codex agent
     "codex": "codex",
+    "gpt-5.4-mini": "codex",
     "gpt-5.2-codex": "codex",
     "gpt-5.1-codex-max": "codex",
     "gpt-5.2": "codex",
@@ -37,16 +38,18 @@ MODEL_AGENT_MAP = {
     "o4": "codex",
     "gpt-4": "codex",
     "gpt-4o": "codex",
-    # Gemini models -> gemini agent
-    "gemini-3-pro-preview": "gemini",
-    "gemini-3-flash-preview": "gemini",
-    "gemini-3-pro": "gemini",
-    "gemini-3-flash": "gemini",
-    "pro": "gemini",
-    "flash": "gemini",
+    # Gemini models -> agy (Antigravity) agent
+    "gemini-3.5-flash": "agy",
+    "gemini-3.1-pro": "agy",
+    "gemini-3.1-flash-lite-preview": "agy",
+    "gemini-3-pro-preview": "agy",
+    "gemini-3-flash-preview": "agy",
+    "pro": "agy",
+    "flash": "agy",
+    "flash-lite": "agy",
     # Legacy Gemini
-    "gemini-2.5-pro": "gemini",
-    "gemini-2.5-flash": "gemini",
+    "gemini-2.5-pro": "agy",
+    "gemini-2.5-flash": "agy",
     # Mistral models -> vibe agent
     "mistral-large": "vibe",
     "mistral-medium": "vibe",
@@ -55,6 +58,11 @@ MODEL_AGENT_MAP = {
     "glm": "zai",
     "glm-4": "zai",
     "glm-4.7": "zai",
+    # Command Code models -> commandcode agent
+    "deepseek-v4-pro": "commandcode",
+    "deepseek-v4-flash": "commandcode",
+    "deepseek/deepseek-v4-pro": "commandcode",
+    "deepseek/deepseek-v4-flash": "commandcode",
     # OpenRouter prefixed models
     "openrouter/": "openrouter",
     "minimax": "openrouter",
@@ -103,7 +111,7 @@ def get_agent_for_model(model: str) -> str:
     if "gpt" in model_lower or "openai" in model_lower:
         return "codex"
     if "gemini" in model_lower or "google" in model_lower:
-        return "gemini"
+        return "agy"
     if "mistral" in model_lower:
         return "vibe"
 
@@ -116,7 +124,8 @@ def get_cli_path(agent: str) -> Optional[str]:
     paths = {
         "claude": settings.claude_path,
         "codex": settings.codex_path,
-        "gemini": settings.gemini_path,
+        "commandcode": settings.commandcode_path,
+        "agy": settings.agy_path,
         "vibe": settings.vibe_path,
         "aider": settings.aider_path,
         "openrouter": settings.aider_path,  # OpenRouter uses aider
@@ -137,7 +146,7 @@ def print_banner(config: InteractiveConfig):
         print(f"  Dir: {config.working_dir}")
     print()
     print("  Commands:")
-    print("    /agent <name>  - Switch agent (claude, codex, gemini, vibe, aider)")
+    print("    /agent <name>  - Switch agent (claude, codex, commandcode, agy, vibe, aider)")
     print("    /model <name>  - Switch model")
     print("    /super         - Toggle superagent mode")
     print("    /help          - Show commands")
@@ -186,7 +195,7 @@ def handle_command(cmd: str, config: InteractiveConfig) -> bool:
 
     elif command == "agent":
         if arg:
-            valid_agents = ["claude", "codex", "gemini", "vibe", "aider", "openrouter", "zai"]
+            valid_agents = ["claude", "codex", "commandcode", "agy", "vibe", "aider", "openrouter", "zai"]
             if arg in valid_agents:
                 config.agent = arg
                 print(f"Switched to agent: {arg}")
@@ -495,8 +504,21 @@ def run_prompt_interactive(prompt: str, config: InteractiveConfig):
     if config.agent == "codex":
         cmd = [cli_path, prompt, "--model", config.model, "--approval-mode", "full-auto"]
 
-    elif config.agent == "gemini":
-        cmd = [cli_path, prompt, "--model", config.model]
+    elif config.agent == "commandcode":
+        from robot.agents.commandcode import CommandCodeAgent
+        resolved = CommandCodeAgent()._resolve_model(config.model)
+        cmd = [
+            cli_path, "-p", prompt,
+            "--model", resolved,
+            "--yolo", "--skip-onboarding", "--trust",
+        ]
+
+    elif config.agent == "agy":
+        # agy has no --model flag; model selection happens via env var,
+        # which means we cannot drive it cleanly via direct subprocess here.
+        # Fall back to running through the Robot API which sets the env var.
+        run_prompt_via_robot(prompt, config)
+        return
 
     elif config.agent == "vibe":
         cmd = [cli_path, "-p", prompt, "--model", config.model]

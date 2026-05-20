@@ -38,7 +38,7 @@ class Robot:
         Get an agent instance by name.
 
         Args:
-            agent: Agent name (claude, codex, gemini, vibe, aider)
+            agent: Agent name (claude, codex, commandcode, agy, vibe, aider)
             config: Optional configuration
 
         Returns:
@@ -172,7 +172,7 @@ class Robot:
     @classmethod
     def _import_all_agents(cls) -> None:
         """Import all agent modules to populate registry."""
-        agent_names = ["claude", "codex", "gemini", "vibe", "aider", "openrouter", "zai"]
+        agent_names = ["claude", "codex", "commandcode", "agy", "vibe", "aider", "openrouter", "zai"]
         for name in agent_names:
             try:
                 __import__(f"robot.agents.{name}")

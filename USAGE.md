@@ -24,7 +24,7 @@ print(config.resume)
 ```
 
 *   **Initialization**: Creates a configuration object specifying parameters like the model to use, execution timeout, API credentials, working directory, and session resume options.
-*   **Model Selection**: The `model` attribute specifies the AI model (e.g., "sonnet", "gpt-4o") the agent should use.
+*   **Model Selection**: The `model` attribute specifies the AI model (e.g., "sonnet", "gpt-5.4-mini") the agent should use.
 *   **Session Management**: `resume` (boolean) and `session_id` (string) control whether to continue a previous conversation or start a new one.
 *   **Environment Overrides**: `api_key` and `base_url` allow overriding global environment variables for specific agent instances.
 

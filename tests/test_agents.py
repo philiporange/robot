@@ -11,10 +11,13 @@ def test_registry_lists_agents():
     registered = Robot.list_registered()
     assert "claude" in registered
     assert "codex" in registered
-    assert "gemini" in registered
+    assert "commandcode" in registered
+    assert "agy" in registered
     assert "vibe" in registered
     assert "aider" in registered
     assert "openrouter" in registered
+    # gemini agent has been removed in favor of agy
+    assert "gemini" not in registered
 
 
 def test_get_claude_agent():
@@ -62,6 +65,7 @@ def test_load_readme_prompt():
     assert config.name == "readme"
     assert "README.md" in config.prompt
     assert config.get_model("claude") == "sonnet"
+    assert config.get_model("codex") == "gpt-5.4-mini"
 
 
 def test_prompt_render_variables():
@@ -108,17 +112,48 @@ def test_codex_agent_env_vars():
     assert env.get("OPENAI_BASE_URL") == "https://api.example.com/v1"
 
 
-def test_gemini_agent_env_vars():
-    """Test GeminiAgent sets correct environment variables."""
-    config = AgentConfig(
-        api_key="test-google-key",
-        base_url="https://api.example.com",
-    )
-    agent = Robot.get("gemini", config=config)
-    env = agent.get_env_vars()
+def test_codex_default_model():
+    """Test Codex defaults to the log interpreter model."""
+    agent = Robot.get("codex")
+
+    assert agent.default_model == "gpt-5.4-mini"
+    assert agent._resolve_model("codex") == "gpt-5.4-mini"
+    assert agent._resolve_model("mini") == "gpt-5.4-mini"
+
+
+def test_codex_build_command_uses_exec_subcommand():
+    """Test Codex uses the current non-interactive exec interface."""
+    agent = Robot.get("codex")
+    cmd = agent.build_command(prompt="Test prompt", model="mini")
+
+    assert cmd[0].endswith("codex")
+    assert cmd[1] == "exec"
+    assert "-q" not in cmd
+    assert "--approval-mode" not in cmd
+    assert "--model" in cmd
+    assert "gpt-5.4-mini" in cmd
+    assert "--full-auto" in cmd
+    assert cmd[-1] == "Test prompt"
+
+
+def test_codex_danger_full_access_approval_mode():
+    """Test Codex can request its explicit bypass flag."""
+    agent = Robot.get("codex")
+    cmd = agent.build_command(prompt="Test prompt", approval_mode="danger-full-access")
+
+    assert "--dangerously-bypass-approvals-and-sandbox" in cmd
+    assert "--full-auto" not in cmd
+
+
+def test_agy_agent_env_vars():
+    """Test AgyAgent sets correct environment variables."""
+    config = AgentConfig(api_key="test-google-key")
+    agent = Robot.get("agy", config=config)
+    env = agent.get_env_vars(model="gemini-3.5-flash")
 
     assert env.get("GOOGLE_API_KEY") == "test-google-key"
-    assert env.get("GOOGLE_BASE_URL") == "https://api.example.com"
+    # agy passes model via env var, not CLI flag
+    assert env.get("CASCADE_DEFAULT_MODEL_OVERRIDE") == "gemini-3.5-flash"
 
 
 def test_vibe_agent_env_vars():
@@ -325,41 +360,92 @@ def test_codex_resume_session_id():
     assert "--last" not in cmd
 
 
-def test_gemini_supports_resume():
-    """Test Gemini agent supports resume."""
-    agent = Robot.get("gemini")
+def test_agy_supports_resume():
+    """Test agy agent supports resume."""
+    agent = Robot.get("agy")
     assert agent.supports_resume is True
 
 
-def test_gemini_resume_latest():
-    """Test Gemini --resume latest for most recent session."""
+def test_agy_resume_continue():
+    """Test agy --continue for most recent conversation."""
     config = AgentConfig(resume=True)
-    agent = Robot.get("gemini", config=config)
+    agent = Robot.get("agy", config=config)
     cmd = agent.build_command(prompt="Test")
 
-    assert "--resume" in cmd
-    assert "latest" in cmd
+    assert "--continue" in cmd
+    assert "--conversation" not in cmd
 
 
-def test_gemini_resume_session_id():
-    """Test Gemini --resume with specific session index."""
-    config = AgentConfig(session_id="5")
-    agent = Robot.get("gemini", config=config)
+def test_agy_resume_session_id():
+    """Test agy --conversation with specific conversation id."""
+    config = AgentConfig(session_id="conv-abc123")
+    agent = Robot.get("agy", config=config)
     cmd = agent.build_command(prompt="Test")
 
-    assert "--resume" in cmd
-    assert "5" in cmd
+    assert "--conversation" in cmd
+    assert "conv-abc123" in cmd
+    assert "--continue" not in cmd
 
 
-def test_gemini_system_prompt_env_var():
-    """Test Gemini sets GEMINI_SYSTEM_MD for system prompts."""
-    config = AgentConfig(system_prompt="You are a helpful assistant.")
-    agent = Robot.get("gemini", config=config)
-    env = agent.get_env_vars(system_prompt="You are a helpful assistant.")
+def test_agy_default_model():
+    """Test agy defaults to gemini-3.5-flash."""
+    agent = Robot.get("agy")
+    assert agent.default_model == "gemini-3.5-flash"
 
-    assert "GEMINI_SYSTEM_MD" in env
-    # Should point to a temp file
-    assert env["GEMINI_SYSTEM_MD"].endswith(".md")
+
+def test_agy_model_aliases():
+    """Test agy model alias resolution."""
+    agent = Robot.get("agy")
+    assert agent._resolve_model("flash") == "gemini-3.5-flash"
+    assert agent._resolve_model("pro") == "gemini-3.1-pro"
+    assert agent._resolve_model("flash-lite") == "gemini-3.1-flash-lite-preview"
+
+
+def test_agy_model_via_env_var():
+    """Test agy applies model through CASCADE_DEFAULT_MODEL_OVERRIDE, not --model."""
+    agent = Robot.get("agy")
+    cmd = agent.build_command(prompt="Test", model="flash")
+    env = agent.get_env_vars(model="flash")
+
+    # agy CLI does not support --model
+    assert "--model" not in cmd
+    # Model is set via env var instead
+    assert env.get("CASCADE_DEFAULT_MODEL_OVERRIDE") == "gemini-3.5-flash"
+
+
+def test_agy_print_mode():
+    """Test agy build_command uses -p print mode."""
+    agent = Robot.get("agy")
+    cmd = agent.build_command(prompt="Test prompt")
+
+    assert cmd[0].endswith("agy")
+    assert "-p" in cmd
+    assert "Test prompt" in cmd
+    assert "--dangerously-skip-permissions" in cmd
+
+
+def test_agy_add_dir():
+    """Test agy includes working_dir as --add-dir."""
+    from pathlib import Path
+
+    config = AgentConfig(working_dir=Path("/project/dir"))
+    agent = Robot.get("agy", config=config)
+    cmd = agent.build_command(prompt="Test")
+
+    assert "--add-dir" in cmd
+    assert "/project/dir" in cmd
+
+
+def test_agy_prompt_prefix():
+    """Test agy prepends prompt_prefix to prompt."""
+    config = AgentConfig(prompt_prefix="Use type hints.")
+    agent = Robot.get("agy", config=config)
+    cmd = agent.build_command(prompt="Write code")
+
+    p_idx = cmd.index("-p")
+    prompt_arg = cmd[p_idx + 1]
+    assert "Use type hints." in prompt_arg
+    assert "Write code" in prompt_arg
 
 
 def test_vibe_supports_resume():
@@ -508,38 +594,6 @@ def test_codex_prompt_prefix():
     assert prompt_idx is not None, "Prompt prefix should be prepended to prompt"
 
 
-def test_gemini_prompt_prefix():
-    """Test Gemini appends prompt_prefix to system prompt in temp file."""
-    config = AgentConfig(
-        system_prompt="You are helpful.",
-        prompt_prefix="Focus on performance."
-    )
-    agent = Robot.get("gemini", config=config)
-    env = agent.get_env_vars(
-        system_prompt="You are helpful.",
-        prompt_prefix="Focus on performance."
-    )
-
-    assert "GEMINI_SYSTEM_MD" in env
-    # Read the temp file to verify content
-    from pathlib import Path
-    content = Path(env["GEMINI_SYSTEM_MD"]).read_text()
-    assert "You are helpful." in content
-    assert "Focus on performance." in content
-
-
-def test_gemini_prompt_prefix_only():
-    """Test Gemini with only prompt_prefix (no system prompt)."""
-    config = AgentConfig(prompt_prefix="Focus on security.")
-    agent = Robot.get("gemini", config=config)
-    env = agent.get_env_vars(prompt_prefix="Focus on security.")
-
-    assert "GEMINI_SYSTEM_MD" in env
-    from pathlib import Path
-    content = Path(env["GEMINI_SYSTEM_MD"]).read_text()
-    assert "Focus on security." in content
-
-
 def test_vibe_prompt_prefix():
     """Test Vibe prepends prompt_prefix to prompt."""
     config = AgentConfig(prompt_prefix="Be concise.")
@@ -616,13 +670,13 @@ def test_superagent_prefix_custom_values():
         max_subagents=3,
         subagent_timeout=600,
         working_dir=Path("/custom/path"),
-        allowed_agents=["claude", "gemini"],
+        allowed_agents=["claude", "agy"],
     )
 
     assert "3 subagents" in prefix
     assert "600" in prefix
     assert "/custom/path" in prefix
-    assert "claude, gemini" in prefix
+    assert "claude, agy" in prefix
 
 
 def test_superagent_wrapper():
@@ -744,11 +798,12 @@ def test_get_agent_for_model():
     assert get_agent_for_model("haiku") == "claude"
 
     # OpenAI models
-    assert get_agent_for_model("o4-mini") == "codex"
+    assert get_agent_for_model("gpt-5.4-mini") == "codex"
     assert get_agent_for_model("gpt-4o") == "codex"
 
-    # Gemini models
-    assert get_agent_for_model("gemini-2.5-pro") == "gemini"
+    # Gemini models -> agy (Antigravity) agent
+    assert get_agent_for_model("gemini-3.5-flash") == "agy"
+    assert get_agent_for_model("gemini-2.5-pro") == "agy"
 
     # Mistral models
     assert get_agent_for_model("mistral-large") == "vibe"
@@ -785,9 +840,9 @@ def test_handle_command_model():
     config = InteractiveConfig()
 
     # Switch to GPT model - should auto-select codex
-    result = handle_command("model gpt-4o", config)
+    result = handle_command("model gpt-5.4-mini", config)
     assert result is True
-    assert config.model == "gpt-4o"
+    assert config.model == "gpt-5.4-mini"
     assert config.agent == "codex"
 
 
@@ -837,11 +892,120 @@ def test_model_agent_map_coverage():
     # Verify key models are mapped
     assert "opus" in MODEL_AGENT_MAP
     assert "sonnet" in MODEL_AGENT_MAP
-    assert "o4-mini" in MODEL_AGENT_MAP
-    assert "gemini-2.5-pro" in MODEL_AGENT_MAP
+    assert "gpt-5.4-mini" in MODEL_AGENT_MAP
+    assert "gemini-3.5-flash" in MODEL_AGENT_MAP
     assert "mistral-large" in MODEL_AGENT_MAP
     assert "minimax" in MODEL_AGENT_MAP
     assert "glm-4.7" in MODEL_AGENT_MAP
+
+
+# Command Code agent tests
+
+
+def test_commandcode_agent_registered():
+    """Test Command Code agent is registered."""
+    assert "commandcode" in Robot.list_registered()
+
+
+def test_get_commandcode_agent():
+    """Test getting Command Code agent instance."""
+    agent = Robot.get("commandcode")
+    assert agent.name == "commandcode"
+    assert agent.default_model == "deepseek/deepseek-v4-pro"
+    assert agent.supports_resume is True
+
+
+def test_commandcode_model_aliases():
+    """Test Command Code model alias resolution."""
+    agent = Robot.get("commandcode")
+
+    assert agent._resolve_model("deepseek") == "deepseek/deepseek-v4-pro"
+    assert agent._resolve_model("deepseek-v4-pro") == "deepseek/deepseek-v4-pro"
+    assert agent._resolve_model("flash") == "deepseek/deepseek-v4-flash"
+    assert agent._resolve_model("opus") == "claude-opus-4-7"
+    assert agent._resolve_model("sonnet") == "claude-sonnet-4-6"
+    # Unknown models pass through unchanged
+    assert agent._resolve_model("custom/model-id") == "custom/model-id"
+
+
+def test_commandcode_build_command():
+    """Test Command Code command building uses -p print mode."""
+    agent = Robot.get("commandcode")
+    cmd = agent.build_command(prompt="Test prompt", model="deepseek-v4-pro")
+
+    assert cmd[0].endswith("cmd")
+    assert "-p" in cmd
+    assert "Test prompt" in cmd
+    assert "--model" in cmd
+    assert "deepseek/deepseek-v4-pro" in cmd
+    assert "--yolo" in cmd
+    assert "--skip-onboarding" in cmd
+    assert "--trust" in cmd
+
+
+def test_commandcode_env_vars():
+    """Test Command Code sets correct environment variables."""
+    config = AgentConfig(
+        api_key="test-cmd-key",
+        base_url="https://api.commandcode.ai",
+    )
+    agent = Robot.get("commandcode", config=config)
+    env = agent.get_env_vars()
+
+    assert env.get("COMMAND_CODE_API_KEY") == "test-cmd-key"
+    assert env.get("COMMANDCODE_API_URL") == "https://api.commandcode.ai"
+
+
+def test_commandcode_supports_resume():
+    """Test Command Code resume flags."""
+    config = AgentConfig(resume=True)
+    agent = Robot.get("commandcode", config=config)
+    cmd = agent.build_command(prompt="Test")
+
+    assert "--continue" in cmd
+
+
+def test_commandcode_resume_session_id():
+    """Test Command Code -r with named session."""
+    config = AgentConfig(session_id="auth-refactor")
+    agent = Robot.get("commandcode", config=config)
+    cmd = agent.build_command(prompt="Test")
+
+    assert "--resume" in cmd
+    assert "auth-refactor" in cmd
+    assert "--continue" not in cmd
+
+
+def test_commandcode_prompt_prefix():
+    """Test Command Code prepends prompt_prefix to prompt."""
+    config = AgentConfig(prompt_prefix="Use type hints.")
+    agent = Robot.get("commandcode", config=config)
+    cmd = agent.build_command(prompt="Write code")
+
+    p_idx = cmd.index("-p")
+    prompt_arg = cmd[p_idx + 1]
+    assert "Use type hints." in prompt_arg
+    assert "Write code" in prompt_arg
+
+
+def test_commandcode_add_dir():
+    """Test Command Code includes working_dir as --add-dir."""
+    from pathlib import Path
+
+    config = AgentConfig(working_dir=Path("/project/dir"))
+    agent = Robot.get("commandcode", config=config)
+    cmd = agent.build_command(prompt="Test")
+
+    assert "--add-dir" in cmd
+    assert "/project/dir" in cmd
+
+
+def test_interactive_commandcode_model_mapping():
+    """Test interactive mode recognizes commandcode models."""
+    from robot.interactive import get_agent_for_model
+
+    assert get_agent_for_model("deepseek-v4-pro") == "commandcode"
+    assert get_agent_for_model("deepseek/deepseek-v4-pro") == "commandcode"
 
 
 # Z.ai agent tests

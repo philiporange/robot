@@ -1,7 +1,10 @@
 """
 OpenAI Codex CLI agent implementation.
 
-Wraps the `codex` CLI for headless execution with quiet mode support.
+Wraps the `codex exec` CLI for headless execution and defaults Codex-backed
+Robot tasks to the GPT-5.4 Mini model. The command builder targets the current
+Codex non-interactive interface, including resume support and low-friction
+`--full-auto` execution.
 """
 
 import logging
@@ -24,11 +27,14 @@ class CodexAgent(BaseAgent):
     supports_streaming = False
     supports_system_prompt = False
     supports_resume = True
-    default_model = "gpt-5.2-codex"
+    default_model = "gpt-5.4-mini"
 
     # Model aliases for Codex
     MODEL_ALIASES = {
-        "codex": "gpt-5.2-codex",
+        "codex": "gpt-5.4-mini",
+        "mini": "gpt-5.4-mini",
+        "5.4-mini": "gpt-5.4-mini",
+        "gpt-5.4-mini": "gpt-5.4-mini",
         "5.2": "gpt-5.2-codex",
         "5.1": "gpt-5.1-codex-max",
         "max": "gpt-5.1-codex-max",
@@ -63,6 +69,27 @@ class CodexAgent(BaseAgent):
 
         return env
 
+    def _approval_args(self, approval_mode: str | None) -> list[str]:
+        """Translate Robot's approval mode into current Codex exec flags."""
+        mode = (approval_mode or "").replace("_", "-")
+        if mode == "full-auto":
+            return ["--full-auto"]
+        if mode in {
+            "danger-full-access",
+            "dangerously-bypass-approvals-and-sandbox",
+            "bypass-approvals-and-sandbox",
+        }:
+            return ["--dangerously-bypass-approvals-and-sandbox"]
+        return []
+
+    def _exec_options(self, model: Optional[str], approval_mode: str | None) -> list[str]:
+        """Build Codex exec options that must appear before positional args."""
+        options: list[str] = []
+        if model:
+            options.extend(["--model", self._resolve_model(model)])
+        options.extend(self._approval_args(approval_mode))
+        return options
+
     def build_command(
         self,
         prompt: str,
@@ -96,21 +123,16 @@ class CodexAgent(BaseAgent):
         if sess_id is None and self.config.history_file:
             sess_id = str(self.config.history_file)
 
+        options = self._exec_options(model, approval_mode)
         if sess_id:
             # Resume specific session
-            cmd = [self.get_cli_path(), "exec", "resume", sess_id, prompt]
+            cmd = [self.get_cli_path(), "exec", "resume", *options, sess_id, prompt]
         elif should_resume:
             # Resume most recent session
-            cmd = [self.get_cli_path(), "exec", "resume", "--last", prompt]
+            cmd = [self.get_cli_path(), "exec", "resume", *options, "--last", prompt]
         else:
             # Normal execution
-            cmd = [self.get_cli_path(), "-q", prompt]
-
-        if model:
-            resolved = self._resolve_model(model)
-            cmd.extend(["--model", resolved])
-
-        cmd.extend(["--approval-mode", approval_mode])
+            cmd = [self.get_cli_path(), "exec", *options, prompt]
 
         return cmd
 

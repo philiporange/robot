@@ -9,8 +9,9 @@ defaults:
 # Default agent preference order (first available is used)
 agent_priority:
   - claude
-  - gemini
+  - agy
   - codex
+  - commandcode
   - aider
   - vibe
 
@@ -19,19 +20,22 @@ agent_priority:
 model_tiers:
   fast:
     claude: haiku
-    codex: o4-mini
-    gemini: gemini-2.0-flash
+    codex: gpt-5.4-mini
+    commandcode: deepseek/deepseek-v4-flash
+    agy: gemini-3.5-flash
     vibe: mistral-small
     aider: haiku
   balanced:
     claude: sonnet
-    codex: o4-mini
-    gemini: gemini-2.5-pro
+    codex: gpt-5.4-mini
+    commandcode: deepseek/deepseek-v4-pro
+    agy: gemini-3.5-flash
     vibe: mistral-large
     aider: sonnet
   powerful:
     claude: opus
-    codex: o3
-    gemini: gemini-2.5-pro
+    codex: gpt-5.4-mini
+    commandcode: deepseek/deepseek-v4-pro
+    agy: gemini-3.1-pro
     vibe: mistral-large
     aider: opus

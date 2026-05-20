@@ -10,7 +10,8 @@ Robot provides a consistent API for invoking AI coding assistants in headless mo
 
 - Claude Code (`claude`) - Anthropic's coding agent
 - OpenAI Codex (`codex`) - OpenAI's coding agent
-- Gemini CLI (`gemini`) - Google's coding agent
+- Antigravity (`agy`) - Google's coding agent (formerly Gemini CLI)
+- Command Code (`cmd`) - Coding agent that learns your taste
 - Mistral Vibe (`vibe`) - Mistral's coding agent
 - Aider (`aider`) - Open source AI pair programming
 - OpenRouter (`openrouter`) - Access any model via OpenRouter API
@@ -54,8 +55,9 @@ robot
 
 # Interactive mode with specific model (auto-selects agent)
 robot -m sonnet
-robot -m gpt-4o    # Uses codex agent
-robot -m gemini-3-pro-preview  # Uses gemini agent
+robot -m gpt-5.4-mini    # Uses codex agent
+robot -m gemini-3.5-flash      # Uses agy (Antigravity) agent
+robot -m deepseek-v4-pro       # Uses commandcode agent
 
 # Run a single prompt
 robot run "Explain this code" --agent claude
@@ -90,7 +92,7 @@ Running `robot` with no arguments starts an interactive TUI session:
 
 | Command | Description |
 |---------|-------------|
-| `/agent <name>` | Switch agent (claude, codex, gemini, vibe, aider, openrouter) |
+| `/agent <name>` | Switch agent (claude, codex, commandcode, agy, vibe, aider, openrouter) |
 | `/model <name>` | Switch model (auto-selects appropriate agent) |
 | `/super` | Toggle superagent mode |
 | `/dir <path>` | Change working directory |
@@ -213,7 +215,7 @@ description: Code review
 
 models:
   claude: sonnet
-  codex: o4-mini
+  codex: gpt-5.4-mini
 
 system: |
   You are an experienced code reviewer.
@@ -231,13 +233,15 @@ variables:
 |-------|-------|-----------|---------------|--------|
 | claude | Yes | Yes | Yes | Yes |
 | codex | Yes | No | No | Yes |
-| gemini | Yes | Yes | Yes* | Yes |
+| commandcode | Yes | No | No | Yes |
+| agy | Yes | No | No | Yes |
 | vibe | No | Yes | No | Yes |
 | aider | No | Yes | No | Yes |
 | openrouter | No | Yes | No | Yes |
 | zai | No | Yes | No | Yes |
 
-*Gemini system prompts are set via a temp file and the `GEMINI_SYSTEM_MD` environment variable.
+The `agy` agent has no `--model` CLI flag; the model is selected via the
+`CASCADE_DEFAULT_MODEL_OVERRIDE` environment variable that agy reads at startup.
 
 All agents now support session resume for cached context savings.
 

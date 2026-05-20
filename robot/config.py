@@ -32,7 +32,8 @@ class Settings:
     # Agent binary paths
     claude_path: str = field(default_factory=lambda: _get_path("ROBOT_CLAUDE_PATH", "claude"))
     codex_path: str = field(default_factory=lambda: _get_path("ROBOT_CODEX_PATH", "codex"))
-    gemini_path: str = field(default_factory=lambda: _get_path("ROBOT_GEMINI_PATH", "gemini"))
+    commandcode_path: str = field(default_factory=lambda: _get_path("ROBOT_COMMANDCODE_PATH", "cmd"))
+    agy_path: str = field(default_factory=lambda: _get_path("ROBOT_AGY_PATH", "agy"))
     vibe_path: str = field(default_factory=lambda: _get_path("ROBOT_VIBE_PATH", "vibe"))
     aider_path: str = field(default_factory=lambda: _get_path("ROBOT_AIDER_PATH", "aider"))
 
@@ -52,12 +53,20 @@ class Settings:
         default_factory=lambda: os.getenv("ROBOT_CODEX_BASE_URL") or os.getenv("OPENAI_BASE_URL")
     )
 
-    # Gemini API configuration
-    gemini_api_key: Optional[str] = field(
-        default_factory=lambda: os.getenv("ROBOT_GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    # Command Code API configuration
+    commandcode_api_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("ROBOT_COMMANDCODE_API_KEY") or os.getenv("COMMAND_CODE_API_KEY")
     )
-    gemini_base_url: Optional[str] = field(
-        default_factory=lambda: os.getenv("ROBOT_GEMINI_BASE_URL")
+    commandcode_base_url: Optional[str] = field(
+        default_factory=lambda: os.getenv("ROBOT_COMMANDCODE_BASE_URL") or os.getenv("COMMANDCODE_API_URL")
+    )
+
+    # Antigravity (agy) API configuration
+    agy_api_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("ROBOT_AGY_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    )
+    agy_base_url: Optional[str] = field(
+        default_factory=lambda: os.getenv("ROBOT_AGY_BASE_URL")
     )
 
     # Mistral/Vibe API configuration
@@ -121,7 +130,8 @@ class Settings:
         paths = {
             "claude": self.claude_path,
             "codex": self.codex_path,
-            "gemini": self.gemini_path,
+            "commandcode": self.commandcode_path,
+            "agy": self.agy_path,
             "vibe": self.vibe_path,
             "aider": self.aider_path,
         }
@@ -132,7 +142,8 @@ class Settings:
         keys = {
             "claude": self.claude_api_key,
             "codex": self.codex_api_key,
-            "gemini": self.gemini_api_key,
+            "commandcode": self.commandcode_api_key,
+            "agy": self.agy_api_key,
             "vibe": self.vibe_api_key,
             "aider": self.aider_api_key,
             "openrouter": self.openrouter_api_key,
@@ -144,7 +155,8 @@ class Settings:
         urls = {
             "claude": self.claude_base_url,
             "codex": self.codex_base_url,
-            "gemini": self.gemini_base_url,
+            "commandcode": self.commandcode_base_url,
+            "agy": self.agy_base_url,
             "vibe": self.vibe_base_url,
             "aider": self.aider_base_url,
             "openrouter": self.openrouter_base_url,

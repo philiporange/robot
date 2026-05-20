@@ -75,7 +75,7 @@ def get_superagent_prefix(
         Prompt prefix string with subagent instructions
     """
     work_dir_str = str(working_dir) if working_dir else "."
-    agents_str = ", ".join(allowed_agents) if allowed_agents else "claude, codex, gemini, vibe, aider, openrouter"
+    agents_str = ", ".join(allowed_agents) if allowed_agents else "claude, codex, commandcode, agy, vibe, aider, openrouter"
 
     return f"""# SUPERAGENT CAPABILITIES
 
