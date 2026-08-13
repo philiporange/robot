@@ -30,9 +30,11 @@ class ZaiAgent(BaseAgent):
 
     # Z.ai model aliases
     MODEL_ALIASES = {
-        "glm": "glm-4.7",
+        "glm": "glm-5.2",
         "glm-4": "glm-4.7",
         "glm-4.7": "glm-4.7",
+        "glm-5": "glm-5.2",
+        "glm-5.2": "glm-5.2",
         "claude": "claude-sonnet-4-20250514",
         "sonnet": "claude-sonnet-4-20250514",
         "opus": "claude-opus-4-20250514",
@@ -40,7 +42,7 @@ class ZaiAgent(BaseAgent):
     }
 
     # Z.ai API endpoint
-    ZAI_BASE_URL = "https://api.z.ai/api/openai"
+    ZAI_BASE_URL = "https://api.z.ai/api/coding/paas/v4"
 
     def get_cli_path(self) -> str:
         return settings.aider_path
@@ -118,7 +120,19 @@ class ZaiAgent(BaseAgent):
             "--yes",
             "--model", resolved,
             "--no-git",
+            # Aider auto-loads .env files (including ~/.env), whose
+            # OPENAI_API_KEY would clobber the Z.ai credentials passed via
+            # the environment.
+            "--env-file", "/dev/null",
         ]
+
+        # Pass credentials explicitly; environment-only configuration has
+        # proven unreliable across aider versions.
+        env = self.get_env_vars()
+        if env.get("OPENAI_API_KEY"):
+            cmd.extend(["--openai-api-key", env["OPENAI_API_KEY"]])
+        if env.get("OPENAI_API_BASE"):
+            cmd.extend(["--openai-api-base", env["OPENAI_API_BASE"]])
 
         if not auto_commits:
             cmd.append("--no-auto-commits")
