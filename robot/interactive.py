@@ -502,7 +502,10 @@ def run_prompt_interactive(prompt: str, config: InteractiveConfig):
 
     # Build command based on agent
     if config.agent == "codex":
-        cmd = [cli_path, prompt, "--model", config.model, "--approval-mode", "full-auto"]
+        cmd = [
+            cli_path, "exec", "--model", config.model,
+            "--sandbox", "workspace-write", prompt,
+        ]
 
     elif config.agent == "commandcode":
         from robot.agents.commandcode import CommandCodeAgent

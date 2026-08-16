@@ -3,8 +3,8 @@ OpenAI Codex CLI agent implementation.
 
 Wraps the `codex exec` CLI for headless execution and defaults Codex-backed
 Robot tasks to the GPT-5.4 Mini model. The command builder targets the current
-Codex non-interactive interface, including resume support and low-friction
-`--full-auto` execution.
+Codex non-interactive interface, including resume support and sandboxed
+execution via `--sandbox`.
 """
 
 import logging
@@ -72,8 +72,10 @@ class CodexAgent(BaseAgent):
     def _approval_args(self, approval_mode: str | None) -> list[str]:
         """Translate Robot's approval mode into current Codex exec flags."""
         mode = (approval_mode or "").replace("_", "-")
-        if mode == "full-auto":
-            return ["--full-auto"]
+        if mode in {"full-auto", "workspace-write"}:
+            return ["--sandbox", "workspace-write"]
+        if mode == "read-only":
+            return ["--sandbox", "read-only"]
         if mode in {
             "danger-full-access",
             "dangerously-bypass-approvals-and-sandbox",

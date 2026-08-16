@@ -132,7 +132,8 @@ def test_codex_build_command_uses_exec_subcommand():
     assert "--approval-mode" not in cmd
     assert "--model" in cmd
     assert "gpt-5.4-mini" in cmd
-    assert "--full-auto" in cmd
+    assert "--sandbox" in cmd
+    assert "workspace-write" in cmd
     assert cmd[-1] == "Test prompt"
 
 
@@ -142,7 +143,7 @@ def test_codex_danger_full_access_approval_mode():
     cmd = agent.build_command(prompt="Test prompt", approval_mode="danger-full-access")
 
     assert "--dangerously-bypass-approvals-and-sandbox" in cmd
-    assert "--full-auto" not in cmd
+    assert "--sandbox" not in cmd
 
 
 def test_agy_agent_env_vars():
